@@ -31,6 +31,7 @@ When you have enough evidence, return only JSON matching the supplied diagnosis
 schema. Every observation must cite an evidence_ref returned by a tool. Keep causes
 as inferences and calibrate confidence to the evidence. Do not propose or claim to
 execute physical control actions.
+Every confidence value must be a decimal between 0.0 and 1.0. Never use percentages such as 80 or 95; use 0.80 or 0.95 instead.
 """
 
 
@@ -126,8 +127,10 @@ class AgentRuntime:
                         {
                             "role": "user",
                             "content": (
-                                "Return only a schema-valid JSON diagnosis. Do not "
-                                "use markdown or prose outside the JSON object."
+                               "Return only a schema-valid JSON diagnosis. "
+                            "Every confidence value must be between 0.0 and 1.0, "
+                            "never a percentage. For example, use 0.95 instead of 95. "
+                            "Do not use markdown or prose outside the JSON object."
                             ),
                         }
                     )
@@ -255,22 +258,58 @@ def _assistant_message(response: ChatResponse) -> dict[str, Any]:
 
 
 def _parse_diagnosis(content: str) -> Diagnosis:
+
     stripped = content.strip()
     candidates = [stripped]
     if stripped.startswith("```") and stripped.endswith("```"):
-        candidates.append(stripped.strip("`").removeprefix("json").strip())
+        candidates.append(
+            stripped.strip("`").removeprefix("json").strip()
+        )
+
     start = stripped.find("{")
     end = stripped.rfind("}")
+
     if start >= 0 and end > start:
         candidates.append(stripped[start : end + 1])
+
     for candidate in candidates:
         try:
-            return Diagnosis.model_validate_json(candidate)
-        except (ValueError, TypeError):
+            payload = json.loads(candidate)
+            payload = _normalize_confidence_values(payload)
+            return Diagnosis.model_validate(payload)
+        except (ValueError, TypeError, json.JSONDecodeError):
             continue
-    raise ModelProviderError("The model failed to return a valid diagnosis.")
+
+    raise ModelProviderError(
+        "The model failed to return a valid diagnosis."
+    )
 
 
+def _normalize_confidence_values(value: object) -> object:
+    if isinstance(value, dict):
+        normalized = {}
+
+        for key, field_value in value.items():
+            if (
+                key == "confidence"
+                and isinstance(field_value, (int, float))
+                and not isinstance(field_value, bool)
+                and 1 < field_value <= 100
+            ):
+                field_value = field_value / 100
+
+            normalized[key] = _normalize_confidence_values(field_value)
+
+        return normalized
+
+    if isinstance(value, list):
+        return [
+            _normalize_confidence_values(item)
+            for item in value
+        ]
+
+    return value
+    
 def _trace_arguments(arguments: object) -> dict[str, Any]:
     if isinstance(arguments, dict):
         return arguments

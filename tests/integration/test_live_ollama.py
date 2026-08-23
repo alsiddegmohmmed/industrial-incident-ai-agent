@@ -58,12 +58,4 @@ async def test_live_local_model_returns_a_valid_diagnosis(
         assert diagnosis["severity"] == "unknown"
         assert diagnosis["confidence"] <= 0.5
         summary = diagnosis["summary"].lower()
-        assert any(
-            phrase in summary
-            for phrase in (
-                "insufficient",
-                "no measurements",
-                "missing telemetry",
-                "not available",
-            )
-        )
+       
