@@ -92,6 +92,15 @@ Tool calling and agent-loop design.
 - tool traces are recorded;
 - evaluation cases test tool selection.
 
+### Implementation status
+
+The v0.2 baseline is implemented with a hand-written `AgentRuntime`, four
+read-only fixture-backed tools, typed argument validation, per-investigation
+turn/tool/time limits, and a response trace. The model receives only device
+metadata initially; telemetry, alerts, state, and incident history are returned
+only after a tool call. Unit tests cover tool selection, rejected arguments,
+trace recording, and loop/timeout protection.
+
 ---
 
 ## v0.3 — Retrieval and grounding

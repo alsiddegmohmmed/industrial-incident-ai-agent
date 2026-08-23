@@ -12,3 +12,11 @@ class FixtureConfigurationError(IncidentAgentError):
 
 class ModelProviderError(IncidentAgentError):
     """Raised when a model provider fails or returns an invalid response."""
+
+
+class ToolCallRejected(IncidentAgentError):
+    """Raised when a model requests a tool with invalid or unauthorized arguments."""
+
+
+class AgentLoopError(IncidentAgentError):
+    """Raised when the bounded agent loop cannot complete safely."""

@@ -36,5 +36,14 @@
       "timestamp": "2026-08-23T07:26:00Z",
       "evidence_ref": "alert:motor-17:high-temperature"
     }
+  ],
+  "incident_history": [
+    {
+      "incident_id": "motor-17-2026-07-15",
+      "timestamp": "2026-07-15T11:20:00Z",
+      "summary": "Elevated vibration during a planned high-load run.",
+      "resolution": "Lubrication was inspected and the motor returned to service.",
+      "evidence_ref": "incident:motor-17:2026-07-15"
+    }
   ]
 }

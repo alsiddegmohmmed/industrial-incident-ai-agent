@@ -81,6 +81,13 @@ Responsibilities:
 
 The first implementation should be simple enough to understand without an orchestration framework.
 
+The v0.2 implementation is `incident_agent.agent.AgentRuntime`. It starts with
+operator text plus device metadata, sends the four typed tool schemas to the
+model, validates and executes each requested call through `ToolRegistry`, and
+then validates the final `Diagnosis`. `AgentLimits` enforces the overall
+timeout, maximum model turns, and maximum tool calls. `AgentTrace` records
+accepted and rejected tool calls without exposing raw model internals.
+
 ### 3.3 Model provider abstraction
 
 Responsibilities:
@@ -101,6 +108,10 @@ Paid access must not be required.
 ### 3.4 Controlled tool layer
 
 The model never receives unrestricted database or shell access.
+
+The v0.2 runtime exposes four read-only fixture-backed tools: state, telemetry
+history, recent alerts, and previous incidents. Each registry is bound to one
+device, so a model cannot use a valid-looking call to inspect another device.
 
 Starting tool surface:
 

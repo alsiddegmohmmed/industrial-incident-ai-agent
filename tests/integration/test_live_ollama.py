@@ -40,9 +40,14 @@ async def test_live_local_model_returns_a_valid_diagnosis(
         )
 
     assert response.status_code == 200, response.text
-    diagnosis = response.json()["diagnosis"]
+    payload = response.json()
+    diagnosis = payload["diagnosis"]
     assert diagnosis["device_id"] == device_id
     assert diagnosis["summary"]
+    assert payload["trace"]["termination_reason"] == "final_answer"
+    assert payload["trace"]["tool_calls"]
+    assert payload["trace"]["tool_calls"][0]["tool_name"] == "get_device_state"
+    assert all(call["accepted"] for call in payload["trace"]["tool_calls"])
 
     if device_id == "motor-17":
         assert diagnosis["severity"] in {"high", "critical"}
@@ -53,4 +58,12 @@ async def test_live_local_model_returns_a_valid_diagnosis(
         assert diagnosis["severity"] == "unknown"
         assert diagnosis["confidence"] <= 0.5
         summary = diagnosis["summary"].lower()
-        assert "insufficient" in summary or "no measurements" in summary
+        assert any(
+            phrase in summary
+            for phrase in (
+                "insufficient",
+                "no measurements",
+                "missing telemetry",
+                "not available",
+            )
+        )

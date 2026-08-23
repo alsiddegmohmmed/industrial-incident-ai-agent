@@ -6,6 +6,7 @@ from pydantic import ValidationError
 
 from incident_agent.errors import ModelProviderError
 from incident_agent.models import Diagnosis
+from incident_agent.providers.base import ChatResponse, ChatToolCall
 
 
 SYSTEM_PROMPT = """You investigate simulated industrial incidents.
@@ -69,4 +70,48 @@ class OllamaModelProvider:
         except (httpx.HTTPError, KeyError, TypeError, ValueError, ValidationError) as exc:
             raise ModelProviderError(
                 "The local model failed to return a valid diagnosis."
+            ) from exc
+
+    async def chat(
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]],
+        output_schema: dict[str, Any],
+    ) -> ChatResponse:
+        """Run one Ollama chat turn, preserving any requested tool calls."""
+        payload = {
+            "model": self._model,
+            "stream": False,
+            "options": {"temperature": 0},
+            "messages": messages,
+            "tools": tools,
+        }
+        # Structured output is useful for the final answer, but sending it on
+        # the first tool-selection turn can make smaller models emit JSON
+        # immediately instead of selecting a tool.
+        if any(message.get("role") == "tool" for message in messages):
+            payload["format"] = output_schema
+
+        try:
+            async with httpx.AsyncClient(
+                timeout=self._timeout_seconds,
+                transport=self._transport,
+            ) as client:
+                response = await client.post(self._endpoint, json=payload)
+                response.raise_for_status()
+                message = response.json()["message"]
+            tool_calls = tuple(
+                ChatToolCall(
+                    name=call["function"]["name"],
+                    arguments=call["function"].get("arguments", {}),
+                )
+                for call in message.get("tool_calls", [])
+            )
+            return ChatResponse(
+                content=message.get("content") or "",
+                tool_calls=tool_calls,
+            )
+        except (httpx.HTTPError, KeyError, TypeError, ValueError) as exc:
+            raise ModelProviderError(
+                "The local model failed during an agent turn."
             ) from exc

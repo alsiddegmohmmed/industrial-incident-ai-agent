@@ -116,6 +116,13 @@ The schema may evolve after evaluation shows which fields are useful.
 
 Tool descriptions are part of the model's operating environment and must be tested.
 
+The v0.2 runtime exposes the first four tools through a typed registry:
+`get_device_state`, `get_telemetry_history`, `get_recent_alerts`, and
+`get_previous_incidents`. Arguments are validated with Pydantic before a handler
+runs, and every registry is bound to exactly one fixture device. Unknown tools,
+malformed arguments, cross-device requests, oversized results, and time windows
+longer than 24 hours are rejected in application code.
+
 ### Tool: get_device_state
 
 Purpose:
@@ -261,7 +268,9 @@ Starting limits should include:
 - maximum tool-result size;
 - maximum retrieved chunks.
 
-Exact values should be chosen during implementation and recorded in an ADR if they become significant.
+The v0.2 defaults are six model turns, twelve tool calls, and a five-minute
+overall investigation timeout. They are configurable through environment
+variables and are enforced independently of model instructions.
 
 ## 14. Provider comparison
 

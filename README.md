@@ -132,9 +132,9 @@ industrial-incident-ai-agent/
 
 Only the documentation exists initially. Runtime directories and implementation files should be created when their milestone requires them.
 
-## Current implementation: v0.1
+## Current implementation: v0.2
 
-The first implementation slice provides:
+The v0.1 baseline provides:
 
 - a FastAPI investigation endpoint;
 - strict Pydantic request and diagnosis schemas;
@@ -142,6 +142,20 @@ The first implementation slice provides:
 - a zero-required-cost local Ollama provider;
 - three synthetic incident fixtures;
 - deterministic API, validation, and failure-path tests.
+
+The v0.2 slice adds a hand-written, bounded agent loop. The model initially
+receives only the operator request and device metadata, then selects from four
+read-only tools:
+
+- `get_device_state`
+- `get_telemetry_history`
+- `get_recent_alerts`
+- `get_previous_incidents`
+
+Every tool call is validated against a typed schema and the requested device.
+The response includes a safe tool trace with accepted/rejected calls, evidence
+references, turn count, and termination reason. The loop enforces an overall
+timeout, maximum model turns, and maximum tool calls.
 
 ### Local setup
 
@@ -210,6 +224,10 @@ can take more than one minute. Faster machines can lower `MODEL_TIMEOUT_SECONDS`
 The default `qwen2.5:3b` model is the measured CPU baseline. The 1.5B model was
 faster but misclassified normal telemetry, while the 7B model exceeded the
 five-minute timeout under resource contention on the development machine.
+
+The agent controls can be tuned with `AGENT_TIMEOUT_SECONDS`, `AGENT_MAX_TURNS`,
+and `AGENT_MAX_TOOL_CALLS`. These limits protect the application even when a
+model repeatedly requests invalid or unnecessary tools.
 
 ## Development principle
 

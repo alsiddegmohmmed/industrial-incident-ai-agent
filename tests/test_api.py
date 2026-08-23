@@ -6,6 +6,7 @@ import pytest
 from incident_agent.errors import ModelProviderError
 from incident_agent.main import create_app
 from incident_agent.models import Diagnosis
+from incident_agent.providers.base import ChatResponse, ChatToolCall
 
 
 pytestmark = pytest.mark.asyncio
@@ -113,6 +114,42 @@ class OverconfidentMissingEvidenceProvider:
         )
 
 
+class ToolCallingProvider:
+    def __init__(self) -> None:
+        self.turn = 0
+        self.initial_user_message = ""
+
+    async def chat(
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]],
+        output_schema: dict[str, Any],
+    ) -> ChatResponse:
+        self.initial_user_message = messages[1]["content"]
+        self.turn += 1
+        if self.turn == 1:
+            return ChatResponse(
+                content="",
+                tool_calls=(
+                    ChatToolCall(
+                        name="get_device_state",
+                        arguments={"device_id": "motor-17"},
+                    ),
+                ),
+            )
+        return ChatResponse(
+            content=(
+                '{"device_id":"motor-17","severity":"low",'
+                '"summary":"State reviewed.","observations":[{'
+                '"statement":"The current state was inspected.",'
+                '"source":"device_state",'
+                '"evidence_ref":"state:motor-17:2026-08-23T07:30:00Z"}],'
+                '"inferences":[],"recommended_actions":[],"confidence":0.8,'
+                '"evidence_refs":["state:motor-17:2026-08-23T07:30:00Z"]}'
+            )
+        )
+
+
 @pytest.mark.parametrize("device_id", ["motor-17", "motor-21", "pump-04"])
 async def test_investigation_runs_for_each_initial_fixture(device_id: str) -> None:
     transport = httpx.ASGITransport(app=create_app(FakeProvider()))
@@ -191,6 +228,22 @@ async def test_missing_measurements_cap_model_confidence() -> None:
     assert diagnosis["severity"] == "unknown"
     assert diagnosis["confidence"] == 0.5
     assert diagnosis["inferences"][0]["confidence"] == 0.5
+
+
+async def test_api_uses_tool_loop_and_returns_trace() -> None:
+    provider = ToolCallingProvider()
+    transport = httpx.ASGITransport(app=create_app(provider))
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/v1/investigations",
+            json={"operator_request": "Inspect motor-17."},
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert "current_state" not in provider.initial_user_message
+    assert payload["trace"]["termination_reason"] == "final_answer"
+    assert payload["trace"]["tool_calls"][0]["accepted"] is True
 
 
 async def test_health_endpoint() -> None:

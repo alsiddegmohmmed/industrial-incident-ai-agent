@@ -2,8 +2,9 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, status
 
+from incident_agent.agent import AgentLimits
 from incident_agent.config import Settings
-from incident_agent.errors import DeviceNotFoundError, ModelProviderError
+from incident_agent.errors import AgentLoopError, DeviceNotFoundError, ModelProviderError
 from incident_agent.models import (
     HealthResponse,
     InvestigationRequest,
@@ -33,8 +34,13 @@ def create_app(provider: ModelProvider | None = None) -> FastAPI:
     service = InvestigationService(
         repository=FixtureRepository(PROJECT_ROOT / "data" / "incidents"),
         provider=provider or build_provider(settings),
+        limits=AgentLimits(
+            max_turns=settings.agent_max_turns,
+            max_tool_calls=settings.agent_max_tool_calls,
+            timeout_seconds=settings.agent_timeout_seconds,
+        ),
     )
-    app = FastAPI(title="Industrial Incident AI Agent", version="0.1.0")
+    app = FastAPI(title="Industrial Incident AI Agent", version="0.2.0")
 
     @app.get("/health", response_model=HealthResponse)
     async def health() -> HealthResponse:
@@ -51,6 +57,11 @@ def create_app(provider: ModelProvider | None = None) -> FastAPI:
         except DeviceNotFoundError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         except ModelProviderError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=str(exc),
+            ) from exc
+        except AgentLoopError as exc:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail=str(exc),
