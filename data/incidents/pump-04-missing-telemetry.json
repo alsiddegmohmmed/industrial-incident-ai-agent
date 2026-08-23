@@ -1,0 +1,25 @@
+{
+  "device_id": "pump-04",
+  "device_model": "PMP-200",
+  "operating_limits": {
+    "temperature_c": {"warning_above": 75.0, "critical_above": 90.0},
+    "vibration_mm_s": {"warning_above": 5.0, "critical_above": 8.0},
+    "load_percent": {"warning_above": 90.0, "critical_above": 99.0}
+  },
+  "current_state": {
+    "status": "unknown",
+    "temperature_c": null,
+    "vibration_mm_s": null,
+    "rpm": null,
+    "load_percent": null,
+    "evidence_ref": "state:pump-04:2026-08-23T07:30:00Z"
+  },
+  "recent_telemetry": [],
+  "recent_alerts": [
+    {
+      "code": "TELEMETRY_UNAVAILABLE",
+      "timestamp": "2026-08-23T07:20:00Z",
+      "evidence_ref": "alert:pump-04:telemetry-unavailable"
+    }
+  ]
+}

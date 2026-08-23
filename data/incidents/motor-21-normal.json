@@ -1,0 +1,34 @@
+{
+  "device_id": "motor-21",
+  "device_model": "ACM-400",
+  "operating_limits": {
+    "temperature_c": {"warning_above": 80.0, "critical_above": 90.0},
+    "vibration_mm_s": {"warning_above": 4.5, "critical_above": 7.1},
+    "load_percent": {"warning_above": 90.0, "critical_above": 99.0}
+  },
+  "current_state": {
+    "status": "running",
+    "temperature_c": 61.3,
+    "vibration_mm_s": 2.1,
+    "rpm": 1435,
+    "load_percent": 63.4,
+    "evidence_ref": "state:motor-21:2026-08-23T07:30:00Z"
+  },
+  "recent_telemetry": [
+    {
+      "timestamp": "2026-08-23T07:10:00Z",
+      "temperature_c": 60.8,
+      "vibration_mm_s": 2.0,
+      "load_percent": 62.9,
+      "evidence_ref": "telemetry:motor-21:2026-08-23T07:10:00Z"
+    },
+    {
+      "timestamp": "2026-08-23T07:30:00Z",
+      "temperature_c": 61.3,
+      "vibration_mm_s": 2.1,
+      "load_percent": 63.4,
+      "evidence_ref": "telemetry:motor-21:2026-08-23T07:30:00Z"
+    }
+  ],
+  "recent_alerts": []
+}
