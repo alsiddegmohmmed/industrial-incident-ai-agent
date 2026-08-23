@@ -150,6 +150,43 @@ class ToolCallingProvider:
         )
 
 
+class ManualToolCallingProvider:
+    def __init__(self) -> None:
+        self.turn = 0
+
+    async def chat(
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]],
+        output_schema: dict[str, Any],
+    ) -> ChatResponse:
+        self.turn += 1
+        if self.turn == 1:
+            return ChatResponse(
+                content="",
+                tool_calls=(
+                    ChatToolCall(
+                        name="search_equipment_manual",
+                        arguments={
+                            "device_model": "ACM-400",
+                            "query": "rising vibration and temperature",
+                        },
+                    ),
+                ),
+            )
+        return ChatResponse(
+            content=(
+                '{"device_id":"motor-17","severity":"high",'
+                '"summary":"The manual describes a mechanical warning pattern.",'
+                '"observations":[{"statement":"The manual links rising vibration '
+                'and temperature with bearing, alignment, or lubrication problems.",'
+                '"source":"manual","evidence_ref":"manual:acm-400:acm-400-001"}],'
+                '"inferences":[],"recommended_actions":[],"confidence":0.7,'
+                '"evidence_refs":["manual:acm-400:acm-400-001"]}'
+            )
+        )
+
+
 @pytest.mark.parametrize("device_id", ["motor-17", "motor-21", "pump-04"])
 async def test_investigation_runs_for_each_initial_fixture(device_id: str) -> None:
     transport = httpx.ASGITransport(app=create_app(FakeProvider()))
@@ -244,6 +281,25 @@ async def test_api_uses_tool_loop_and_returns_trace() -> None:
     assert "current_state" not in provider.initial_user_message
     assert payload["trace"]["termination_reason"] == "final_answer"
     assert payload["trace"]["tool_calls"][0]["accepted"] is True
+
+
+async def test_api_adds_source_metadata_for_manual_evidence() -> None:
+    transport = httpx.ASGITransport(app=create_app(ManualToolCallingProvider()))
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/v1/investigations",
+            json={
+                "operator_request": (
+                    "For motor-17, what does the ACM-400 manual say about vibration?"
+                )
+            },
+        )
+
+    assert response.status_code == 200
+    citations = response.json()["diagnosis"]["citations"]
+    assert citations[0]["evidence_ref"] == "manual:acm-400:acm-400-001"
+    assert citations[0]["source"] == "manual"
+    assert citations[0]["source_ref"].startswith("ACM-400.md#")
 
 
 async def test_health_endpoint() -> None:

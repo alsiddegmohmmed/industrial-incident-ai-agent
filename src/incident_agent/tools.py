@@ -16,6 +16,7 @@ from incident_agent.models import (
     TelemetryMetric,
     ToolName,
 )
+from incident_agent.retrieval import ManualRepository
 
 
 class DeviceToolArguments(StrictModel):
@@ -47,6 +48,14 @@ class LimitedDeviceToolArguments(DeviceToolArguments):
     limit: int = Field(default=10, ge=1, le=20)
 
 
+class ManualSearchArguments(StrictModel):
+    device_model: str = Field(
+        pattern=r"^[A-Za-z0-9-]+$", min_length=2, max_length=50
+    )
+    query: str = Field(min_length=3, max_length=500)
+    limit: int = Field(default=3, ge=1, le=5)
+
+
 @dataclass(frozen=True)
 class ToolDefinition:
     name: ToolName
@@ -68,8 +77,13 @@ class ToolDefinition:
 class ToolRegistry:
     """Validates and executes only the tools bound to one incident device."""
 
-    def __init__(self, fixture: IncidentFixture) -> None:
+    def __init__(
+        self,
+        fixture: IncidentFixture,
+        manual_repository: ManualRepository | None = None,
+    ) -> None:
         self._fixture = fixture
+        self._manual_repository = manual_repository
         self._definitions = self._build_definitions()
 
     def schemas(self) -> list[dict[str, Any]]:
@@ -98,10 +112,19 @@ class ToolRegistry:
             ) from exc
 
         device_id = getattr(parsed, "device_id", None)
-        if device_id != self._fixture.device_id:
+        device_model = getattr(parsed, "device_model", None)
+        if device_id is not None and device_id != self._fixture.device_id:
             raise ToolCallRejected(
                 f"Tool {tool_name} is restricted to {self._fixture.device_id}."
             )
+        if device_model is not None and (
+            device_model.upper() != self._fixture.device_model.upper()
+        ):
+            raise ToolCallRejected(
+                f"Tool {tool_name} is restricted to {self._fixture.device_model}."
+            )
+        if device_id is None and device_model is None:
+            raise ToolCallRejected("Tool arguments must identify a device.")
 
         result = definition.handler(parsed)
         encoded = json.dumps(result, separators=(",", ":"))
@@ -110,7 +133,7 @@ class ToolRegistry:
         return result
 
     def _build_definitions(self) -> dict[str, ToolDefinition]:
-        return {
+        definitions = {
             ToolName.GET_DEVICE_STATE.value: ToolDefinition(
                 name=ToolName.GET_DEVICE_STATE,
                 description=(
@@ -145,6 +168,18 @@ class ToolRegistry:
                 handler=self._get_previous_incidents,
             ),
         }
+        if self._manual_repository is not None:
+            definitions[ToolName.SEARCH_EQUIPMENT_MANUAL.value] = ToolDefinition(
+                name=ToolName.SEARCH_EQUIPMENT_MANUAL,
+                description=(
+                    "Search the bounded technical manual for the requested device "
+                    "model. Use this when documented limits or procedures are "
+                    "needed, and cite the returned evidence_ref."
+                ),
+                arguments_model=ManualSearchArguments,
+                handler=self._search_equipment_manual,
+            )
+        return definitions
 
     def _get_device_state(self, arguments: BaseModel) -> dict[str, Any]:
         return {
@@ -210,6 +245,36 @@ class ToolRegistry:
             "device_id": self._fixture.device_id,
             "incidents": incidents,
             "incident_count": len(incidents),
+        }
+
+    def _search_equipment_manual(self, arguments: BaseModel) -> dict[str, Any]:
+        parsed = arguments
+        if not isinstance(parsed, ManualSearchArguments):
+            raise ToolCallRejected("Invalid manual-search arguments.")
+        if self._manual_repository is None:
+            raise ToolCallRejected("The manual repository is unavailable.")
+        results = self._manual_repository.search(
+            parsed.device_model,
+            parsed.query,
+            limit=parsed.limit,
+        )
+        return {
+            "device_id": self._fixture.device_id,
+            "device_model": self._fixture.device_model,
+            "query": parsed.query,
+            "results": [
+                {
+                    "evidence_ref": result.chunk.evidence_ref,
+                    "source": "manual",
+                    "chunk_id": result.chunk.chunk_id,
+                    "title": result.chunk.title,
+                    "source_ref": result.chunk.source_ref,
+                    "excerpt": result.chunk.text,
+                    "score": round(result.score, 4),
+                }
+                for result in results
+            ],
+            "result_count": len(results),
         }
 
 

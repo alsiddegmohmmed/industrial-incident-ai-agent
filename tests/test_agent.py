@@ -9,6 +9,7 @@ from incident_agent.agent import AgentLimits, AgentRuntime
 from incident_agent.errors import AgentLoopError
 from incident_agent.models import IncidentFixture
 from incident_agent.providers.base import ChatResponse, ChatToolCall
+from incident_agent.retrieval import ManualRepository
 from incident_agent.tools import ToolRegistry
 
 
@@ -17,6 +18,13 @@ def incident_tools() -> ToolRegistry:
         (Path("data/incidents") / "motor-17-overheating.json").read_text()
     )
     return ToolRegistry(fixture)
+
+
+def manual_incident_tools() -> ToolRegistry:
+    fixture = IncidentFixture.model_validate_json(
+        (Path("data/incidents") / "motor-17-overheating.json").read_text()
+    )
+    return ToolRegistry(fixture, ManualRepository(Path("data/manuals")))
 
 
 def final_response() -> ChatResponse:
@@ -37,6 +45,29 @@ def final_response() -> ChatResponse:
                 "recommended_actions": [],
                 "confidence": 0.8,
                 "evidence_refs": ["state:motor-17:2026-08-23T07:30:00Z"],
+            }
+        )
+    )
+
+
+def manual_final_response() -> ChatResponse:
+    return ChatResponse(
+        content=json.dumps(
+            {
+                "device_id": "motor-17",
+                "severity": "high",
+                "summary": "The manual identifies rising vibration and temperature as a mechanical warning pattern.",
+                "observations": [
+                    {
+                        "statement": "The equipment manual describes rising vibration together with rising temperature.",
+                        "source": "manual",
+                        "evidence_ref": "manual:acm-400:acm-400-001",
+                    }
+                ],
+                "inferences": [],
+                "recommended_actions": [],
+                "confidence": 0.7,
+                "evidence_refs": ["manual:acm-400:acm-400-001"],
             }
         )
     )
@@ -103,6 +134,39 @@ async def test_agent_selects_tools_without_receiving_full_fixture() -> None:
     assert run.trace.tool_calls[0].accepted is True
     assert "state:motor-17:2026-08-23T07:30:00Z" in run.evidence_refs
     assert any(message["role"] == "tool" for message in provider.requests[1][0])
+
+
+@pytest.mark.asyncio
+async def test_agent_can_ground_a_diagnosis_in_manual_search_results() -> None:
+    provider = SequencedProvider(
+        [
+            ChatResponse(
+                content="",
+                tool_calls=(
+                    ChatToolCall(
+                        name="search_equipment_manual",
+                        arguments={
+                            "device_model": "ACM-400",
+                            "query": "rising vibration and temperature",
+                        },
+                    ),
+                ),
+            ),
+            manual_final_response(),
+        ]
+    )
+
+    run = await AgentRuntime(provider).run(
+        "What does the ACM-400 manual say about rising vibration and temperature?",
+        "motor-17",
+        "ACM-400",
+        manual_incident_tools(),
+    )
+
+    assert provider.requests[0][1][-1]["function"]["name"] == "search_equipment_manual"
+    assert run.trace.tool_calls[0].tool_name == "search_equipment_manual"
+    assert run.diagnosis.observations[0].source == "manual"
+    assert run.evidence_metadata["manual:acm-400:acm-400-001"]["source"] == "manual"
 
 
 @pytest.mark.asyncio

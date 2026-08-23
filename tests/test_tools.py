@@ -4,6 +4,7 @@ import pytest
 
 from incident_agent.errors import ToolCallRejected
 from incident_agent.models import IncidentFixture
+from incident_agent.retrieval import ManualRepository
 from incident_agent.tools import ToolRegistry
 
 
@@ -11,6 +12,15 @@ def registry_for(device_id: str = "motor-17") -> ToolRegistry:
     fixture_name = "overheating" if device_id == "motor-17" else "normal"
     path = Path("data/incidents") / f"{device_id}-{fixture_name}.json"
     return ToolRegistry(IncidentFixture.model_validate_json(path.read_text()))
+
+
+def manual_registry_for(device_id: str = "motor-17") -> ToolRegistry:
+    fixture_name = "overheating" if device_id == "motor-17" else "normal"
+    path = Path("data/incidents") / f"{device_id}-{fixture_name}.json"
+    return ToolRegistry(
+        IncidentFixture.model_validate_json(path.read_text()),
+        ManualRepository(Path("data/manuals")),
+    )
 
 
 def test_tool_schemas_expose_only_the_v02_read_tools() -> None:
@@ -102,3 +112,31 @@ def test_alert_and_incident_history_tools_are_bounded() -> None:
     assert alerts["alert_count"] == 1
     assert incidents["incident_count"] == 1
     assert incidents["incidents"][0]["evidence_ref"] == "incident:motor-17:2026-07-15"
+
+
+def test_manual_search_returns_ranked_citations_and_source_metadata() -> None:
+    registry = manual_registry_for()
+
+    result = registry.execute(
+        "search_equipment_manual",
+        {
+            "device_model": "ACM-400",
+            "query": "What does rising vibration and temperature indicate?",
+            "limit": 2,
+        },
+    )
+
+    assert result["result_count"] >= 1
+    first = result["results"][0]
+    assert first["evidence_ref"].startswith("manual:acm-400:")
+    assert first["source_ref"].startswith("ACM-400.md#")
+    assert "vibration" in first["excerpt"].lower()
+    assert first["score"] > 0
+
+
+def test_manual_search_is_bound_to_fixture_model() -> None:
+    with pytest.raises(ToolCallRejected, match="restricted"):
+        manual_registry_for().execute(
+            "search_equipment_manual",
+            {"device_model": "PMP-200", "query": "telemetry availability"},
+        )

@@ -30,6 +30,7 @@ class ToolName(StrEnum):
     GET_TELEMETRY_HISTORY = "get_telemetry_history"
     GET_RECENT_ALERTS = "get_recent_alerts"
     GET_PREVIOUS_INCIDENTS = "get_previous_incidents"
+    SEARCH_EQUIPMENT_MANUAL = "search_equipment_manual"
 
 
 class TelemetryMetric(StrEnum):
@@ -49,6 +50,14 @@ class Observation(StrictModel):
     statement: str = Field(min_length=1, max_length=500)
     source: EvidenceSource
     evidence_ref: str = Field(min_length=1, max_length=200)
+
+
+class EvidenceCitation(StrictModel):
+    evidence_ref: str = Field(min_length=1, max_length=200)
+    source: EvidenceSource
+    title: str = Field(min_length=1, max_length=200)
+    source_ref: str = Field(min_length=1, max_length=200)
+    excerpt: str = Field(min_length=1, max_length=1000)
 
 
 class Inference(StrictModel):
@@ -73,6 +82,7 @@ class Diagnosis(StrictModel):
     )
     confidence: float = Field(ge=0.0, le=1.0)
     evidence_refs: list[str] = Field(default_factory=list, max_length=30)
+    citations: list[EvidenceCitation] = Field(default_factory=list, max_length=20)
 
 
 class InvestigationRequest(StrictModel):

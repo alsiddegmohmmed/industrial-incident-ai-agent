@@ -132,7 +132,7 @@ industrial-incident-ai-agent/
 
 Only the documentation exists initially. Runtime directories and implementation files should be created when their milestone requires them.
 
-## Current implementation: v0.2
+## Current implementation: v0.3
 
 The v0.1 baseline provides:
 
@@ -156,6 +156,13 @@ Every tool call is validated against a typed schema and the requested device.
 The response includes a safe tool trace with accepted/rejected calls, evidence
 references, turn count, and termination reason. The loop enforces an overall
 timeout, maximum model turns, and maximum tool calls.
+
+The v0.3 slice adds local retrieval and grounding. Two small Markdown manuals
+are ingested into bounded sections and ranked with a dependency-free sparse
+TF-IDF index. The optional `search_equipment_manual` tool returns excerpts with
+stable `evidence_ref`, `source_ref`, title, and score metadata. When a diagnosis
+uses a manual passage, the API adds a validated citation to the response. No
+database, hosted embedding service, or paid API is required.
 
 ### Local setup
 
@@ -217,7 +224,8 @@ curl -X POST http://127.0.0.1:8000/v1/investigations \
 
 Configuration can be changed with the environment variables documented in
 `.env.example`. The API returns `503 Service Unavailable` when the local model
-cannot be reached or its response fails schema validation.
+cannot be reached or its response fails schema validation. Manual citations are
+returned under `diagnosis.citations` when the agent uses the manual-search tool.
 
 The default model timeout is five minutes because first-load, CPU-only inference
 can take more than one minute. Faster machines can lower `MODEL_TIMEOUT_SECONDS`.

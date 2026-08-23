@@ -126,6 +126,17 @@ RAG and context engineering.
 - at least one case requires documentation to answer correctly;
 - irrelevant retrieval behavior is inspected.
 
+### Implementation status
+
+The v0.3 baseline is implemented with two local Markdown manuals, deterministic
+section chunking, a sparse TF-IDF/cosine index, and the
+`search_equipment_manual` tool. Results are filtered to the fixture's device
+model and include stable source metadata. Diagnosis citations are added by
+trusted application code from the retrieved evidence catalog. Retrieval,
+irrelevant queries, tool authorization, and manual-grounded diagnoses are
+covered by tests. A database or neural embedding service is intentionally
+deferred until measurements show that the local index is insufficient.
+
 ---
 
 ## v0.4 — Evaluation-driven development

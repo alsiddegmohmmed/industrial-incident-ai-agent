@@ -5,6 +5,7 @@ from incident_agent.assessment import assess_severity
 from incident_agent.errors import ModelProviderError
 from incident_agent.models import (
     AgentTrace,
+    EvidenceCitation,
     IncidentFixture,
     InvestigationRequest,
     InvestigationResponse,
@@ -12,6 +13,7 @@ from incident_agent.models import (
 )
 from incident_agent.providers.base import ModelProvider
 from incident_agent.repository import FixtureRepository
+from incident_agent.retrieval import ManualRepository
 from incident_agent.tools import ToolRegistry
 
 
@@ -39,10 +41,12 @@ class InvestigationService:
         repository: FixtureRepository,
         provider: ModelProvider,
         limits: AgentLimits | None = None,
+        manual_repository: ManualRepository | None = None,
     ) -> None:
         self._repository = repository
         self._provider = provider
         self._limits = limits or AgentLimits()
+        self._manual_repository = manual_repository
 
     async def investigate(self, request: InvestigationRequest) -> InvestigationResponse:
         context = self._repository.context_for_request(request.operator_request)
@@ -54,11 +58,12 @@ class InvestigationService:
                 operator_request=request.operator_request,
                 device_id=fixture.device_id,
                 device_model=fixture.device_model,
-                tools=ToolRegistry(fixture),
+                tools=ToolRegistry(fixture, self._manual_repository),
             )
             diagnosis = run.diagnosis
             trace = run.trace
             available_refs = set(run.evidence_refs)
+            evidence_metadata = run.evidence_metadata
         else:
             legacy_context = dict(context)
             legacy_context["deterministic_assessment"] = deterministic_assessment
@@ -67,6 +72,7 @@ class InvestigationService:
             )
             trace = AgentTrace(turns=0, termination_reason="legacy_provider")
             available_refs = _collect_evidence_refs(context)
+            evidence_metadata = {}
 
         if diagnosis.device_id != context["device_id"]:
             raise ModelProviderError(
@@ -74,11 +80,26 @@ class InvestigationService:
             )
         claimed_refs = set(diagnosis.evidence_refs)
         claimed_refs.update(item.evidence_ref for item in diagnosis.observations)
+        claimed_refs.update(item.evidence_ref for item in diagnosis.citations)
         if not claimed_refs.issubset(available_refs):
             raise ModelProviderError(
                 "The model returned evidence references that are not in the incident context."
             )
         confidence_cap = deterministic_assessment["confidence_cap"]
+        citations_by_ref = {
+            citation.evidence_ref: citation for citation in diagnosis.citations
+        }
+        for evidence_ref in sorted(claimed_refs):
+            metadata = evidence_metadata.get(evidence_ref)
+            if metadata is None or evidence_ref in citations_by_ref:
+                continue
+            try:
+                citations_by_ref[evidence_ref] = EvidenceCitation.model_validate(
+                    metadata
+                )
+            except ValueError:
+                continue
+
         diagnosis = diagnosis.model_copy(
             update={
                 "severity": Severity(deterministic_assessment["severity"]),
@@ -91,6 +112,7 @@ class InvestigationService:
                     )
                     for inference in diagnosis.inferences
                 ],
+                "citations": list(citations_by_ref.values()),
             }
         )
         return InvestigationResponse(

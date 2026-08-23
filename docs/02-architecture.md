@@ -152,14 +152,19 @@ Ground truth used for evaluation must remain separate from information exposed t
 
 ### 3.7 Retrieval service
 
-Introduced after the tool-calling foundation works.
+The v0.3 implementation loads Markdown manuals at application startup, splits
+them into bounded sections, and stores sparse TF-IDF vectors in memory. The
+manual-search tool applies a device-model filter, returns a small ranked result
+set, and includes stable source metadata. This keeps the retrieval boundary
+understandable before introducing PostgreSQL, pgvector, or an external embedding
+service.
 
 Responsibilities:
 
 - ingest technical documentation;
 - split documents into retrievable units;
-- create embeddings;
-- persist vectors;
+- create local sparse vectors;
+- keep the bounded index in memory;
 - perform search;
 - return bounded evidence with source metadata.
 

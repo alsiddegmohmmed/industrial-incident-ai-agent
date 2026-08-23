@@ -123,6 +123,12 @@ runs, and every registry is bound to exactly one fixture device. Unknown tools,
 malformed arguments, cross-device requests, oversized results, and time windows
 longer than 24 hours are rejected in application code.
 
+The v0.3 runtime adds `search_equipment_manual` when the local manual index is
+available. The tool filters by the fixture's device model, returns at most five
+ranked excerpts, and exposes `evidence_ref`, `source_ref`, title, excerpt, and
+score. The model may cite those refs, but trusted application code constructs
+the final citation metadata; the model is not allowed to invent a source.
+
 ### Tool: get_device_state
 
 Purpose:
@@ -195,7 +201,11 @@ The final diagnosis should clearly distinguish observed data from inferred cause
 
 ## 10. RAG design
 
-When introduced:
+The v0.3 implementation uses a small local sparse index instead of a database or
+neural embedding service. Retrieval is independently testable through the
+`ManualRepository.search` API. This is a deliberate baseline: a heavier vector
+store should be added only if retrieval measurements justify its operational
+cost.
 
 ```text
 Manuals
@@ -204,7 +214,7 @@ Parsing
   ↓
 Chunking
   ↓
-Embedding
+Local sparse TF-IDF vectors
   ↓
 Vector storage
   ↓

@@ -13,6 +13,7 @@ from incident_agent.models import (
 from incident_agent.providers.base import ModelProvider
 from incident_agent.providers.ollama import OllamaModelProvider
 from incident_agent.repository import FixtureRepository
+from incident_agent.retrieval import ManualRepository
 from incident_agent.service import InvestigationService
 
 
@@ -39,6 +40,7 @@ def create_app(provider: ModelProvider | None = None) -> FastAPI:
             max_tool_calls=settings.agent_max_tool_calls,
             timeout_seconds=settings.agent_timeout_seconds,
         ),
+        manual_repository=ManualRepository(PROJECT_ROOT / "data" / "manuals"),
     )
     app = FastAPI(title="Industrial Incident AI Agent", version="0.2.0")
 
